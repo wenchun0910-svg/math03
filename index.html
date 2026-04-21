@@ -308,7 +308,14 @@
         // Initialize Firebase
         async function initFirebase() {
             try {
-                const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+               const firebaseConfig = {
+  apiKey: "AIzaSyBamPpuPjQgjeCasW84U-_l1XuAOHLZIHY",
+  authDomain: "math03-204f4.firebaseapp.com",
+  projectId: "math03-204f4",
+  storageBucket: "math03-204f4.firebasestorage.app",
+  messagingSenderId: "1052585853871",
+  appId: "1:1052585853871:web:c4213071d8c5264a97655a"
+};
                 appId = typeof __app_id !== 'undefined' ? __app_id : 'default-math-app';
                 
                 if (!firebaseConfig) {
