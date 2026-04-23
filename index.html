@@ -99,6 +99,25 @@
         .input-line:focus {
             border-bottom-color: #d4af37;
         }
+
+        /* 標籤頁樣式 */
+        .tab-btn {
+            padding: 8px 16px;
+            border: 1px solid #8c2121;
+            border-bottom: none;
+            background-color: #e8d5b5;
+            color: #3e2723;
+            cursor: pointer;
+            border-radius: 8px 8px 0 0;
+            font-weight: bold;
+        }
+        .tab-btn.active {
+            background-color: #fffaf0;
+            border-bottom: 2px solid #fffaf0;
+            margin-bottom: -2px;
+            position: relative;
+            z-index: 10;
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col items-center py-10 px-4">
@@ -108,14 +127,14 @@
         <div class="bg-[#fffaf0] border-4 border-[#8c2121] p-6 max-w-sm w-full mx-4 shadow-2xl relative">
             <h3 id="modalTitle" class="text-2xl font-bold text-[#8c2121] mb-4 text-center">提示</h3>
             <p id="modalText" class="text-lg text-gray-800 mb-6 text-center">訊息內容</p>
-            <div class="flex justify-center">
+            <div class="flex justify-center flex-wrap gap-4" id="modalButtons">
                 <button onclick="closeModal()" class="btn-chinese">確認</button>
             </div>
         </div>
     </div>
 
     <!-- Main Container -->
-    <div class="w-full max-w-2xl chinese-border">
+    <div class="w-full max-w-3xl chinese-border">
         <div class="chinese-inner min-h-[400px] flex flex-col">
             <div class="corner c-tl"></div>
             <div class="corner c-tr"></div>
@@ -219,7 +238,7 @@
                     <button onclick="switchScreen('mainMenu')" class="btn-secondary text-sm px-4 py-1">登出</button>
                 </h2>
                 
-                <div class="bg-white/50 p-4 border border-[#8c2121] mb-6 flex gap-4 items-end">
+                <div class="bg-white/50 p-4 border border-[#8c2121] mb-4 flex gap-4 items-end flex-wrap">
                     <div>
                         <label class="block text-sm font-bold mb-1">更改管理員密碼</label>
                         <input type="password" id="newAdminPwd" class="input-line p-1 w-48" placeholder="新密碼">
@@ -227,16 +246,21 @@
                     <button onclick="changeAdminPassword()" class="btn-chinese text-sm px-4 py-1">更新密碼</button>
                 </div>
 
-                <h3 class="font-bold text-lg mb-2">成績管理 (全紀錄)</h3>
-                <div class="overflow-y-auto max-h-64 border border-[#8c2121]/50 bg-white/60">
+                <!-- 標籤頁結構 -->
+                <div class="flex mt-2 border-b-2 border-[#8c2121]">
+                    <button id="tabRecent" class="tab-btn active" onclick="switchAdminTab('recent')">過去七天紀錄</button>
+                    <button id="tabAll" class="tab-btn" onclick="switchAdminTab('all')">所有成績紀錄</button>
+                </div>
+
+                <div class="overflow-y-auto max-h-80 border border-[#8c2121] border-t-0 bg-white/60">
                     <table class="w-full text-center text-sm">
-                        <thead class="bg-[#e8d5b5] sticky top-0">
+                        <thead class="bg-[#e8d5b5] sticky top-0 shadow-sm">
                             <tr>
-                                <th class="p-2">姓名</th>
-                                <th class="p-2">分數</th>
-                                <th class="p-2">時間</th>
-                                <th class="p-2">日期</th>
-                                <th class="p-2">操作</th>
+                                <th class="p-2 border-b border-[#8c2121]/30">姓名</th>
+                                <th class="p-2 border-b border-[#8c2121]/30">分數</th>
+                                <th class="p-2 border-b border-[#8c2121]/30">時間</th>
+                                <th class="p-2 border-b border-[#8c2121]/30">測驗日期</th>
+                                <th class="p-2 border-b border-[#8c2121]/30">操作</th>
                             </tr>
                         </thead>
                         <tbody id="adminRecordsBody">
@@ -244,12 +268,13 @@
                         </tbody>
                     </table>
                 </div>
+                <div class="mt-2 text-sm text-gray-600 text-right" id="recordCountDisplay"></div>
             </div>
         </div>
     </div>
 
     <!-- Footer with Admin link -->
-    <div class="mt-8 text-gray-500 flex items-center gap-2 cursor-pointer hover:text-[#8c2121]" onclick="switchScreen('adminLoginScreen')">
+    <div class="mt-8 text-gray-500 flex items-center gap-2 cursor-pointer hover:text-[#8c2121] transition-colors" onclick="switchScreen('adminLoginScreen')">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
             <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
         </svg>
@@ -268,6 +293,10 @@
         let timeElapsed = 0;
         let currentQuizData = [];
         let currentScore = 0;
+        
+        // Admin State
+        let allAdminRecords = [];
+        let currentAdminTab = 'recent'; // 'recent' or 'all'
 
         // The 11 Math Conversions
         const mathFormulas = [
@@ -277,11 +306,41 @@
         ];
 
         // Custom Modal Logic
-        window.showModal = function(title, text) {
+        window.showModal = function(title, text, confirmCallback = null) {
             document.getElementById('modalTitle').innerText = title;
             document.getElementById('modalText').innerText = text;
+            const buttonsContainer = document.getElementById('modalButtons');
+            buttonsContainer.innerHTML = ''; // Clear previous
+
+            if (confirmCallback) {
+                // Show Confirm & Cancel buttons
+                const cancelBtn = document.createElement('button');
+                cancelBtn.className = 'btn-secondary';
+                cancelBtn.innerText = '取消';
+                cancelBtn.onclick = closeModal;
+
+                const confirmBtn = document.createElement('button');
+                confirmBtn.className = 'btn-chinese';
+                confirmBtn.innerText = '確定';
+                confirmBtn.onclick = () => {
+                    closeModal();
+                    confirmCallback();
+                };
+
+                buttonsContainer.appendChild(cancelBtn);
+                buttonsContainer.appendChild(confirmBtn);
+            } else {
+                // Show single OK button
+                const okBtn = document.createElement('button');
+                okBtn.className = 'btn-chinese';
+                okBtn.innerText = '確認';
+                okBtn.onclick = closeModal;
+                buttonsContainer.appendChild(okBtn);
+            }
+
             document.getElementById('customModal').classList.remove('hidden');
         };
+
         window.closeModal = function() {
             document.getElementById('customModal').classList.add('hidden');
         };
@@ -308,7 +367,7 @@
         // Initialize Firebase
         async function initFirebase() {
             try {
-               const firebaseConfig = {
+                              const firebaseConfig = {
   apiKey: "AIzaSyBamPpuPjQgjeCasW84U-_l1XuAOHLZIHY",
   authDomain: "math03-204f4.firebaseapp.com",
   projectId: "math03-204f4",
@@ -316,6 +375,8 @@
   messagingSenderId: "1052585853871",
   appId: "1:1052585853871:web:c4213071d8c5264a97655a"
 };
+   
+
                 appId = typeof __app_id !== 'undefined' ? __app_id : 'default-math-app';
                 
                 if (!firebaseConfig) {
@@ -346,9 +407,8 @@
 
         // Quiz Logic
         window.startGame = function() {
-            // Shuffle and prepare 11 questions
             currentQuizData = [...mathFormulas].sort(() => Math.random() - 0.5).map((item, index) => {
-                const askDecimal = Math.random() > 0.5; // Randomly choose direction
+                const askDecimal = Math.random() > 0.5;
                 return {
                     id: index,
                     questionStr: askDecimal ? item.f : item.d,
@@ -359,25 +419,23 @@
                 };
             });
 
-            // Render Questions
             const container = document.getElementById('questionsContainer');
             container.innerHTML = '';
             currentQuizData.forEach((q, i) => {
                 container.innerHTML += `
-                    <div class="flex items-center justify-center p-2 bg-white/50 border border-[#8c2121]/20 rounded shadow-sm">
+                    <div class="flex items-center justify-center p-2 bg-white/50 border border-[#8c2121]/20 rounded shadow-sm hover:border-[#d4af37] transition-colors">
                         <div class="flex items-center w-48 justify-end">
                             <span class="text-[#8c2121] font-bold mr-2">${i + 1}.</span>
                             ${q.questionHTML}
                             <span class="mx-3 text-gray-500">=</span>
                         </div>
-                        <input type="text" id="q_${i}" class="input-line text-xl w-24 p-1 focus:bg-white" autocomplete="off" placeholder="?">
+                        <input type="text" id="q_${i}" class="input-line text-xl w-24 p-1 focus:bg-white transition-colors" autocomplete="off" placeholder="?">
                     </div>
                 `;
             });
 
             switchScreen('quizScreen');
             
-            // Start Timer
             timeElapsed = 0;
             document.getElementById('timerDisplay').innerText = timeElapsed;
             clearInterval(timerInterval);
@@ -410,8 +468,8 @@
                     correctCount++;
                 } else {
                     let displayQ = q.type === 'decimal' ? q.original.f : q.original.d;
-                    wrongAnswersHTML += `<p class="text-red-700 bg-red-100 p-2 rounded border border-red-200">
-                        第 ${i + 1} 題： 題目 <b>${displayQ}</b> ，正確解答是 <b class="text-xl">${q.answer}</b>，你的回答：${inputVal || '(空白)'}
+                    wrongAnswersHTML += `<p class="text-red-700 bg-red-50 p-2 rounded border border-red-200 shadow-sm">
+                        第 ${i + 1} 題： 題目 <b>${displayQ}</b> ，正確解答是 <b class="text-xl">${q.answer}</b>，你的回答：${inputVal || '<span class="text-gray-400 italic">空白</span>'}
                     </p>`;
                 }
             });
@@ -423,7 +481,7 @@
             
             const wrongArea = document.getElementById('wrongAnswersArea');
             if (correctCount === 11) {
-                wrongArea.innerHTML = `<p class="text-green-700 bg-green-100 p-3 text-center font-bold text-xl rounded">太厲害了！全部答對！🎉</p>`;
+                wrongArea.innerHTML = `<p class="text-green-700 bg-green-50 p-4 text-center font-bold text-xl rounded border border-green-200 shadow-sm">太厲害了！全部答對！🎉</p>`;
             } else {
                 wrongArea.innerHTML = `<h3 class="font-bold text-[#8c2121] mb-2 border-b border-[#8c2121]/30 pb-1">錯誤訂正：</h3>` + wrongAnswersHTML;
             }
@@ -484,7 +542,7 @@
                         let rankIcon = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}`;
                         
                         tbody.innerHTML += `
-                            <tr class="border-b border-[#8c2121]/20 hover:bg-white/80">
+                            <tr class="border-b border-[#8c2121]/20 hover:bg-white/80 transition-colors">
                                 <td class="p-2 ${rankStyle}">${rankIcon}</td>
                                 <td class="p-2 font-bold">${rec.name}</td>
                                 <td class="p-2 text-red-700 font-bold">${rec.score}</td>
@@ -508,18 +566,18 @@
             
             try {
                 const adminDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'admin'));
-                let correctPwd = 'admin'; // 預設密碼
+                let correctPwd = 'admin'; // Default
                 
                 if (adminDoc.exists() && adminDoc.data().password) {
                     correctPwd = adminDoc.data().password;
                 } else {
-                    // 初始化預設密碼
                     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'admin'), { password: correctPwd });
                 }
 
                 if (pwdInput === correctPwd) {
                     switchScreen('adminPanel');
-                    loadAdminRecords();
+                    await fetchAllAdminRecords();
+                    renderAdminTable();
                 } else {
                     showModal('登入失敗', '密碼不正確！預設密碼為 admin');
                 }
@@ -545,49 +603,102 @@
             }
         };
 
-        window.loadAdminRecords = async function() {
-            if (!user) return;
+        // Fetch all records once
+        async function fetchAllAdminRecords() {
             try {
                 const snapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'scores'));
-                let records = [];
-                snapshot.forEach(doc => records.push({ id: doc.id, ...doc.data() }));
-
+                allAdminRecords = [];
+                snapshot.forEach(doc => allAdminRecords.push({ id: doc.id, ...doc.data() }));
                 // Sort by date DESC
-                records.sort((a, b) => new Date(b.date) - new Date(a.date));
-
-                const tbody = document.getElementById('adminRecordsBody');
-                tbody.innerHTML = '';
-                
-                records.forEach(rec => {
-                    let d = new Date(rec.date);
-                    let dateStr = `${d.getMonth()+1}/${d.getDate()} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
-                    tbody.innerHTML += `
-                        <tr class="border-b border-[#8c2121]/20">
-                            <td class="p-2">${rec.name}</td>
-                            <td class="p-2">${rec.score}</td>
-                            <td class="p-2">${rec.time}s</td>
-                            <td class="p-2 text-xs text-gray-500">${dateStr}</td>
-                            <td class="p-2">
-                                <button onclick="deleteRecord('${rec.id}')" class="bg-red-600 text-white px-2 py-1 rounded text-xs hover:bg-red-800">刪除</button>
-                            </td>
-                        </tr>
-                    `;
-                });
+                allAdminRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
             } catch (e) {
-                console.error(e);
+                console.error("Failed to fetch admin records", e);
+                showModal('錯誤', '無法載入成績紀錄。');
             }
+        }
+
+        // Tab Switching Logic
+        window.switchAdminTab = function(tabName) {
+            currentAdminTab = tabName;
+            
+            // Update UI
+            document.getElementById('tabRecent').classList.remove('active');
+            document.getElementById('tabAll').classList.remove('active');
+            
+            if (tabName === 'recent') {
+                document.getElementById('tabRecent').classList.add('active');
+            } else {
+                document.getElementById('tabAll').classList.add('active');
+            }
+
+            renderAdminTable();
         };
 
-        window.deleteRecord = async function(docId) {
+        // Render table based on current tab
+        function renderAdminTable() {
+            const tbody = document.getElementById('adminRecordsBody');
+            tbody.innerHTML = '';
+            
+            let recordsToDisplay = [];
+
+            if (currentAdminTab === 'recent') {
+                // Filter for last 7 days
+                const now = new Date();
+                const sevenDaysAgo = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
+                
+                recordsToDisplay = allAdminRecords.filter(rec => {
+                    const recDate = new Date(rec.date);
+                    return recDate >= sevenDaysAgo;
+                });
+            } else {
+                recordsToDisplay = allAdminRecords;
+            }
+
+            document.getElementById('recordCountDisplay').innerText = `共顯示 ${recordsToDisplay.length} 筆紀錄`;
+
+            if (recordsToDisplay.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-gray-500">目前沒有相關紀錄</td></tr>`;
+                return;
+            }
+
+            recordsToDisplay.forEach(rec => {
+                let d = new Date(rec.date);
+                // Format: YYYY/MM/DD HH:MM
+                let dateStr = `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+                
+                tbody.innerHTML += `
+                    <tr class="border-b border-[#8c2121]/20 hover:bg-white transition-colors">
+                        <td class="p-2 font-bold">${rec.name}</td>
+                        <td class="p-2 text-red-700">${rec.score}</td>
+                        <td class="p-2">${rec.time}s</td>
+                        <td class="p-2 text-xs text-gray-600">${dateStr}</td>
+                        <td class="p-2">
+                            <button onclick="confirmDelete('${rec.id}')" class="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-800 transition-colors shadow-sm">刪除</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        window.confirmDelete = function(docId) {
+            showModal('確認刪除', '確定要刪除這筆成績嗎？此操作無法還原。', () => {
+                executeDelete(docId);
+            });
+        };
+
+        async function executeDelete(docId) {
             if (!user) return;
-            if (!confirm('確定要刪除這筆成績嗎？')) return; // 原生 confirm 備用，主要依據守則可不使用，但管理員介面使用可接受。為確保合規改用直接刪除或客製確認。
             try {
+                // Delete from DB
                 await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'scores', docId));
-                loadAdminRecords(); // Reload
+                // Remove from local array
+                allAdminRecords = allAdminRecords.filter(rec => rec.id !== docId);
+                // Re-render
+                renderAdminTable();
             } catch (e) {
                 showModal('錯誤', '刪除失敗');
             }
-        };
+        }
 
         // Start initialization on load
         window.onload = initFirebase;
